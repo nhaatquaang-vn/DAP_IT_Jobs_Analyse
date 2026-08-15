@@ -1,0 +1,78 @@
+import streamlit as st # type: ignore
+import pandas as pd
+import joblib
+import numpy as np
+import plotly.express as px # type: ignore
+
+st.set_page_config(page_title="IT Job Market Analysis", layout="wide")
+
+@st.cache_resource
+def load_assets():
+    model = joblib.load('it_job_stacking_model.pkl')
+    le = joblib.load('label_encoder.pkl')
+    return model, le
+
+try:
+    model, le = load_assets()
+    df_display = pd.read_csv(r"C:\Users\Asus\Desktop\TrainDAP\data.csv")
+except:
+    st.error("Vui lòng chạy file huấn luyện trước để tạo file .pkl và kiểm tra đường dẫn data.csv")
+    st.stop()
+
+st.sidebar.title("Menu Dự Án")
+page = st.sidebar.radio("Chọn chức năng:", ["Tổng quan thị trường (EDA)", "Dự đoán vị trí công việc", "Thông tin dự án"])
+
+if page == "Tổng quan thị trường (EDA)":
+    st.title("Phân tích tình hình việc làm IT")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Top các vị trí tuyển dụng")
+        target_col = df_display.columns[-1]
+        fig_target = px.bar(df_display[target_col].value_counts().head(10), color_discrete_sequence=['#00CC96'])
+        st.plotly_chart(fig_target, use_container_width=True)
+
+    with col2:
+        st.subheader("Phân bổ theo địa điểm")
+        if 'location' in df_display.columns:
+            fig_pie = px.pie(df_display, names='location', hole=0.4)
+            st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("Cột 'location' không tìm thấy trong dữ liệu thô.")
+
+elif page == "Dự đoán vị trí công việc":
+    st.title("Dự đoán vị trí phù hợp (AI Model)")
+    st.write("Nhập các thông số kỹ thuật để mô hình Stacking đưa ra dự đoán:")
+
+    with st.form("prediction_form"):
+        st.info("Lưu ý: Bạn cần nhập đúng các chỉ số kỹ thuật tương ứng với tập dữ liệu Train.")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            exp = st.number_input("Số năm kinh nghiệm:", min_value=0, max_value=20, value=2)
+            skill_1 = st.selectbox("Kỹ năng chính:", ["Python", "Java", "React", "SQL", "AWS"])
+        with col_b:
+            level = st.selectbox("Cấp bậc:", ["Intern", "Junior", "Senior", "Manager"])
+            remote = st.checkbox("Làm việc từ xa (Remote)?")
+
+        submit = st.form_submit_button("Đưa ra dự đoán")
+
+    if submit:
+        
+        prediction_idx = model.predict(sample_input) # type: ignore
+        result_label = le.inverse_transform(prediction_idx)
+        
+        st.success(f"Kết quả dự đoán: **{result_label[0]}**")
+        st.balloons()
+
+else:
+    st.title("Chi tiết Pipeline Dự Án")
+    st.markdown("""
+    ### Quy trình thực hiện (AI-DS Pipeline)
+    1. **Thu thập:** Web Scraping dữ liệu từ các trang tuyển dụng IT tại VN.
+    2. **Tiền xử lý:** Lọc Outliers bằng *Isolation Forest* và xử lý Missing values.
+    3. **Cân bằng:** Sử dụng kỹ thuật *SMOTETomek* để xử lý mất cân bằng lớp.
+    4. **Mô hình:** *Stacking Ensemble* (Random Forest + XGBoost + SVC).
+    5. **Đánh giá:** Đạt Accuracy ấn tượng dựa trên tập dữ liệu thực tế.
+    """)
